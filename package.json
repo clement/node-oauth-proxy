@@ -1,0 +1,6 @@
+{
+    "version": "0.0.1",
+    "name": "oauth-proxy",
+    "main": "main",
+    "bin": {"oauth-proxy": "bin/oauth-proxy"}
+}

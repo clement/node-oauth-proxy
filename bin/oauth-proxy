@@ -1,0 +1,70 @@
+#!/usr/bin/env node
+
+var sys        = require('sys'),
+    path       = require('path'),
+    optparse   = require('optparse'),
+    http       = require('http'),
+    oauthProxy = require('oauth-proxy'),
+    dirty      = require('dirty');
+
+/* Package information and default arguments */
+package = JSON.parse(require('fs').readFileSync(__dirname+'/../package.json'));
+var args = {
+    'host': '127.0.0.1',
+    'port': 8888,
+    'manager': true,
+    'manager-port': 8899,
+    'db-path': 'oauth-proxy.db'
+};
+
+/* Available options */
+var rules = [
+    ['-h', '--help', 'Prints this help message'],
+    ['-v', '--version', 'Prints the version and exits'],
+    ['-p', '--port NUMBER', 'Port to listen to (default `'+args.port+'`)'],
+    ['-h', '--host HOSTNAME', 'Adress to bind to (default `'+args.host+'`)'],
+    ['-m', '--manager-port NUMBER', 'Specifies the port the manager interface should bind to (default `'+args['manager-port']+'`)'],
+    ['-d', '--db-path', 'The path to the database file (default to `'+args['db-path']+'`)'],
+    ['--no-manager', 'Deactivate the manager interface']
+];
+
+/* ARGV parsing */
+var parser = new optparse.OptionParser(rules);
+parser.banner = "Usage: "+Object.keys(package.bin)[0]+" [--host "+args.host+"] [--port "+args.port+"]";
+
+parser.on('help', function () {
+    sys.puts(parser);
+    process.exit(0);
+});
+parser.on('version', function () {
+    sys.puts(package.version);
+    process.exit(0);
+});
+parser.on('no-manager', function () {
+    args.manager = false;
+});
+parser.on('*', function (opt, value) {
+    args[opt] = value;
+});
+parser.on(function (opt) {
+    sys.error('Unrecognized option '+opt+'.')
+    sys.error('Try "'+Object.keys(package.bin)[0]+' --help" for help');
+    process.exit(1);
+});
+
+parser.parse(process.ARGV);
+
+/* Run the server */
+var db = dirty(args['db-path']);
+sys.log('Loading database from `'+path.normalize(args['db-path'])+'`');
+db.addListener('load', function() {
+        sys.log('... loaded');
+
+        http.createServer(function (req, res) { oauthProxy.routes.proxy(req, res, db); }).listen(args.port, args.host);
+        sys.log("OauthProxy listening on "+args.host+":"+args.port);
+
+        if (args.manager) {
+            http.createServer(function (req, res) {oauthProxy.routes.manager(req, res, db); }).listen(args['manager-port'], args.host);
+            sys.log("OauthProxy manager interface listening on "+args.host+":"+args['manager-port']);
+        }
+    });
